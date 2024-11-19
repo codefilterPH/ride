@@ -1,5 +1,19 @@
+
+from django.conf import settings
+from django.contrib.auth.models import AbstractUser
 from django.db import models
-from django.contrib.auth.models import User
+
+class UserProfile(AbstractUser):
+    ROLE_CHOICES = (
+        ('admin', 'Admin'),
+        ('driver', 'Driver'),
+        ('rider', 'Rider'),
+    )
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='rider')
+
+    def __str__(self):
+        return self.username
+
 
 # Create your models here.
 class Ride(models.Model):
@@ -10,8 +24,8 @@ class Ride(models.Model):
     )
     id_ride = models.AutoField(primary_key=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
-    id_rider = models.ForeignKey(User, related_name="rides_as_rider", on_delete=models.CASCADE)
-    id_driver = models.ForeignKey(User, related_name="rides_as_driver", on_delete=models.CASCADE)
+    id_driver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='driver_rides')
+    id_rider = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='rider_rides')
     pickup_latitude = models.FloatField()
     pickup_longitude = models.FloatField()
     dropoff_latitude = models.FloatField()

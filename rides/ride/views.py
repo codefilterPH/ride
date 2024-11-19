@@ -2,11 +2,16 @@ from rest_framework import viewsets, permissions, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.pagination import PageNumberPagination
 from .models import Ride, RideEvent
-from .serializers import RideSerializer, RideEventSerializer, UserSerializer
-from django.contrib.auth.models import User
+from .serializers import RideSerializer, RideEventSerializer, UserProfileSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Prefetch
+from django.conf import settings
+from django.apps import apps
+from geopy.distance import geodesic
+
+# Dynamically load the custom user model
+User = apps.get_model(settings.AUTH_USER_MODEL)
 
 
 # Custom Pagination
@@ -36,13 +41,12 @@ class RideViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def sort_by_distance(self, request):
-        from geopy.distance import geodesic
-
         try:
             latitude = float(request.query_params.get('latitude'))
             longitude = float(request.query_params.get('longitude'))
         except (TypeError, ValueError):
-            return Response({"error": "Invalid GPS coordinates"}, status=400)
+            return Response({"error": "Invalid GPS coordinates. Please provide valid latitude and longitude values."},
+                            status=400)
 
         rides = self.get_queryset()
         for ride in rides:
@@ -50,9 +54,14 @@ class RideViewSet(viewsets.ModelViewSet):
             ride.distance_to_pickup = geodesic((latitude, longitude), pickup_location).km
 
         sorted_rides = sorted(rides, key=lambda r: r.distance_to_pickup)
-        page = self.paginate_queryset(sorted_rides)
-        serializer = self.get_serializer(page, many=True)
-        return self.get_paginated_response(serializer.data)
+        page = self.paginate_queryset(sorted_rides)  # Paginate sorted rides
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        # If no pagination is required (i.e., when all results are returned at once)
+        serializer = self.get_serializer(sorted_rides, many=True)
+        return Response(serializer.data)
 
 
 # RideEvent ViewSet
@@ -64,12 +73,5 @@ class RideEventViewSet(viewsets.ModelViewSet):
 
 # User ViewSet
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_permissions(self):
-        # Only admin users can access this endpoint
-        if self.action in ['list', 'create', 'update', 'partial_update', 'destroy']:
-            self.permission_classes = [permissions.IsAdminUser]
-        return super().get_permissions()
+    queryset = User.objects.all()  # Now this will work
+    serializer_class = UserProfileSerializer

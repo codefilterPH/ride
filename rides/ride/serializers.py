@@ -1,13 +1,12 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
+from django.conf import settings
 from .models import Ride, RideEvent
 
-
-# User Serializer
-class UserSerializer(serializers.ModelSerializer):
+# UserProfile Serializer
+class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone_number']  # Include phone_number if added via custom user model
+        model = settings.AUTH_USER_MODEL  # Use the custom user model
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role']
 
 
 # RideEvent Serializer
@@ -19,8 +18,8 @@ class RideEventSerializer(serializers.ModelSerializer):
 
 # Ride Serializer
 class RideSerializer(serializers.ModelSerializer):
-    rider = UserSerializer(source='id_rider', read_only=True)
-    driver = UserSerializer(source='id_driver', read_only=True)
+    rider = UserProfileSerializer(source='id_rider', read_only=True)
+    driver = UserProfileSerializer(source='id_driver', read_only=True)  # Changed to UserProfileSerializer
     ride_events = RideEventSerializer(source='rideevent_set', many=True, read_only=True)
     todays_ride_events = serializers.SerializerMethodField()
 

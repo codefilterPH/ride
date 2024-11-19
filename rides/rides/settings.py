@@ -135,8 +135,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 # Static file handling
 STATIC_URL = "/static/"
-STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]  # Project-level static files
-STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")  # Directory for collectstatic
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "staticfiles")]  # Project-level static files
+STATIC_ROOT = os.path.join(BASE_DIR, "static")  # Directory for collectstatic
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
@@ -151,6 +151,8 @@ if not DEBUG:
     STATICFILES_STORAGE = (
         "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
     )
+
+AUTH_USER_MODEL = 'ride.UserProfile'
 
 
 # Default primary key field type
