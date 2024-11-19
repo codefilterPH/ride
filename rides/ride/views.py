@@ -9,10 +9,10 @@ from django.db.models import Prefetch
 from django.conf import settings
 from django.apps import apps
 from geopy.distance import geodesic
+from .decorators import admin_only  # Import the admin_only decorator
 
 # Dynamically load the custom user model
 User = apps.get_model(settings.AUTH_USER_MODEL)
-
 
 # Custom Pagination
 class StandardResultsPagination(PageNumberPagination):
@@ -20,25 +20,52 @@ class StandardResultsPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     max_page_size = 100
 
-
-# Ride ViewSet
-class RideViewSet(viewsets.ModelViewSet):
-    queryset = Ride.objects.all()
-    serializer_class = RideSerializer
-    permission_classes = [permissions.IsAuthenticated]  # Admin-only handled in permission logic
+# Ride ViewSet (Manually defining actions)
+class RideViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardResultsPagination
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['status', 'id_rider__email']
     ordering_fields = ['pickup_time']
 
     def get_queryset(self):
-        # Optimize with prefetching for performance
         return Ride.objects.prefetch_related(
             Prefetch('rideevent_set'),
             'id_rider',
             'id_driver'
         )
 
+    @admin_only  # Apply the admin_only decorator
+    def list(self, request):
+        rides = self.get_queryset()
+        latitude = float(request.query_params.get('latitude', 0))
+        longitude = float(request.query_params.get('longitude', 0))
+        for ride in rides:
+            pickup_location = (ride.pickup_latitude, ride.pickup_longitude)
+            ride.distance_to_pickup = geodesic((latitude, longitude), pickup_location).km
+
+        sorted_rides = sorted(rides, key=lambda r: r.distance_to_pickup)
+        page = self.paginate_queryset(sorted_rides)
+        if page is not None:
+            serializer = RideSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = RideSerializer(sorted_rides, many=True)
+        return Response(serializer.data)
+
+    @admin_only  # Apply the admin_only decorator
+    def retrieve(self, request, pk=None):
+        try:
+            ride = Ride.objects.prefetch_related(
+                Prefetch('rideevent_set'),
+                'id_rider',
+                'id_driver'
+            ).get(pk=pk)
+            serializer = RideSerializer(ride)
+            return Response(serializer.data)
+        except Ride.DoesNotExist:
+            return Response({"error": "Ride not found"}, status=404)
+
+    @admin_only  # Apply the admin_only decorator
     @action(detail=False, methods=['get'])
     def sort_by_distance(self, request):
         try:
@@ -54,24 +81,48 @@ class RideViewSet(viewsets.ModelViewSet):
             ride.distance_to_pickup = geodesic((latitude, longitude), pickup_location).km
 
         sorted_rides = sorted(rides, key=lambda r: r.distance_to_pickup)
-        page = self.paginate_queryset(sorted_rides)  # Paginate sorted rides
+        page = self.paginate_queryset(sorted_rides)
         if page is not None:
-            serializer = self.get_serializer(page, many=True)
+            serializer = RideSerializer(page, many=True)
             return self.get_paginated_response(serializer.data)
 
-        # If no pagination is required (i.e., when all results are returned at once)
-        serializer = self.get_serializer(sorted_rides, many=True)
+        serializer = RideSerializer(sorted_rides, many=True)
         return Response(serializer.data)
 
-
-# RideEvent ViewSet
-class RideEventViewSet(viewsets.ModelViewSet):
-    queryset = RideEvent.objects.all()
-    serializer_class = RideEventSerializer
+# RideEvent ViewSet (Manually defining actions)
+class RideEventViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
+    @admin_only  # Apply the admin_only decorator
+    def list(self, request):
+        queryset = RideEvent.objects.all()
+        serializer = RideEventSerializer(queryset, many=True)
+        return Response(serializer.data)
 
-# User ViewSet
-class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()  # Now this will work
-    serializer_class = UserProfileSerializer
+    @admin_only  # Apply the admin_only decorator
+    def retrieve(self, request, pk=None):
+        try:
+            ride_event = RideEvent.objects.get(pk=pk)
+            serializer = RideEventSerializer(ride_event)
+            return Response(serializer.data)
+        except RideEvent.DoesNotExist:
+            return Response({"error": "RideEvent not found"}, status=404)
+
+# User ViewSet (Manually defining actions)
+class UserViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @admin_only  # Apply the admin_only decorator
+    def list(self, request):
+        queryset = User.objects.all()
+        serializer = UserProfileSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @admin_only  # Apply the admin_only decorator
+    def retrieve(self, request, pk=None):
+        try:
+            user = User.objects.get(pk=pk)
+            serializer = UserProfileSerializer(user)
+            return Response(serializer.data)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
